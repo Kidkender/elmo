@@ -40,7 +40,6 @@ import {
 import { normalizeBrandUpdate } from "@/lib/brand-settings";
 import { validateWebsiteUrl } from "@/lib/brand-website";
 import type { TrackedTarget } from "@/lib/model-filter";
-import { getBrandEarliestRunDate } from "@/lib/rollup-read";
 import { INVALID_SLUG, TAKEN_SLUG } from "@/lib/slug-errors";
 
 /**
@@ -131,7 +130,6 @@ async function getBrandDetailFromDb(
 			promptCount: number;
 			trackedTargets: TrackedTarget[];
 			trackingState: BrandTrackingState;
-			earliestDataDate: string | null;
 	  })
 	| undefined
 > {
@@ -141,10 +139,9 @@ async function getBrandDetailFromDb(
 		});
 		if (!brand) return undefined;
 
-		const [brandPrompts, resolved, earliestDataDate] = await Promise.all([
+		const [brandPrompts, resolved] = await Promise.all([
 			db.select({ premiumModels: prompts.premiumModels }).from(prompts).where(eq(prompts.brandId, brandId)),
 			entitlements ?? getOrgEntitlements(brand.organizationId),
-			getBrandEarliestRunDate(brandId),
 		]);
 
 		return {
@@ -152,7 +149,6 @@ async function getBrandDetailFromDb(
 			promptCount: brandPrompts.length,
 			trackedTargets: computeTrackedTargets(brand, brandPrompts, resolved),
 			trackingState: brandTrackingState(brand, resolved),
-			earliestDataDate,
 		};
 	} catch (error) {
 		console.error("Error fetching brand:", error);

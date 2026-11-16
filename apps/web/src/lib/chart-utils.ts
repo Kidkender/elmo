@@ -12,20 +12,6 @@ export interface ChartSubject {
 	name: string;
 }
 
-/** Use a stable one-month default while history loads, then shorten it for brands with less than a week of data. */
-export function getDefaultLookbackPeriod(earliestDataDate: string | null | undefined): LookbackPeriod {
-	if (!earliestDataDate) {
-		return "1m";
-	}
-
-	const earliestDate = new Date(earliestDataDate);
-	const now = new Date();
-	const diffInMs = now.getTime() - earliestDate.getTime();
-	const diffInDays = diffInMs / (1000 * 60 * 60 * 24);
-
-	return diffInDays > 7 ? "1m" : "1w";
-}
-
 export function getDaysFromLookback(lookback: LookbackPeriod): number {
 	const custom = parseCustomLookback(lookback);
 	if (custom?.from) return daysInRange({ from: custom.from, to: getLookbackEndDate(lookback) });
@@ -136,53 +122,38 @@ export function toBatchChartData(
 	}));
 }
 
-/**
- * Each prompt's `days` is `;`-separated days of `,`-separated counts: an index
- * into `dates`, total runs, runs naming the brand, then runs naming each of
- * `competitors`. Text because the server-function encoding spends more bytes
- * describing a number than the number takes.
- */
-export interface PackedBatchChartData {
-	dates: string[];
-	competitors: string[];
-	prompts: { prompt_id: string; days: string }[];
+/** One prompt's chart points, a column per field: every array has an entry per day the prompt ran. */
+interface PromptChartColumns {
+	date: string[];
+	total_runs: number[];
+	brand_mentioned_count: number[];
+	competitor_counts: Record<string, number>[];
 }
 
-export function packBatchChartData(points: ProcessedBatchChartDataPoint[]): PackedBatchChartData {
-	const dates = [...new Set(points.map((point) => String(point.date)))].sort();
-	const dateIndex = new Map(dates.map((date, index) => [date, index]));
-	const competitors = [...new Set(points.flatMap((point) => Object.keys(point.competitor_counts)))].sort();
+export type BatchChartColumns = Record<string, PromptChartColumns>;
 
-	const daysByPrompt = new Map<string, string[]>();
+export function toBatchChartColumns(points: ProcessedBatchChartDataPoint[]): BatchChartColumns {
+	const columns: BatchChartColumns = {};
 	for (const point of points) {
-		const day = [
-			dateIndex.get(String(point.date)),
-			point.total_runs,
-			point.brand_mentioned_count,
-			...competitors.map((name) => point.competitor_counts[name] ?? 0),
-		].join(",");
-		const days = daysByPrompt.get(point.prompt_id);
-		if (days) days.push(day);
-		else daysByPrompt.set(point.prompt_id, [day]);
+		columns[point.prompt_id] ??= { date: [], total_runs: [], brand_mentioned_count: [], competitor_counts: [] };
+		const prompt = columns[point.prompt_id];
+		prompt.date.push(point.date);
+		prompt.total_runs.push(point.total_runs);
+		prompt.brand_mentioned_count.push(point.brand_mentioned_count);
+		prompt.competitor_counts.push(point.competitor_counts);
 	}
-
-	return {
-		dates,
-		competitors,
-		prompts: [...daysByPrompt].map(([prompt_id, days]) => ({ prompt_id, days: days.join(";") })),
-	};
+	return columns;
 }
 
-export function unpackBatchChartData(packed: PackedBatchChartData): ProcessedBatchChartDataPoint[] {
-	return packed.prompts.flatMap(({ prompt_id, days }) =>
-		days.split(";").map((day) => {
-			const [dateIndex, total_runs, brand_mentioned_count, ...counts] = day.split(",").map(Number);
-			const competitor_counts: Record<string, number> = {};
-			counts.forEach((count, index) => {
-				if (count > 0) competitor_counts[packed.competitors[index]] = count;
-			});
-			return { prompt_id, date: packed.dates[dateIndex], total_runs, brand_mentioned_count, competitor_counts };
-		}),
+export function fromBatchChartColumns(columns: BatchChartColumns): ProcessedBatchChartDataPoint[] {
+	return Object.entries(columns).flatMap(([prompt_id, prompt]) =>
+		prompt.date.map((date, day) => ({
+			prompt_id,
+			date,
+			total_runs: prompt.total_runs[day],
+			brand_mentioned_count: prompt.brand_mentioned_count[day],
+			competitor_counts: prompt.competitor_counts[day],
+		})),
 	);
 }
 

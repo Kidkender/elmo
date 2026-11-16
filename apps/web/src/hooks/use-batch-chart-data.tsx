@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useHydrated } from "@tanstack/react-router";
 import { useResolvedBrandId } from "@/hooks/use-brand-id";
-import { unpackBatchChartData } from "@/lib/chart-utils";
+import { fromBatchChartColumns } from "@/lib/chart-utils";
 import type { LookbackPeriod } from "@/lib/lookback";
 import { browserTimezone } from "@/lib/viewer-timezone";
 import { getBatchChartDataFn } from "@/server/visibility";
@@ -31,7 +31,7 @@ export function useBatchChartData(brandId?: string, filters?: BatchChartDataFilt
 		refetchOnWindowFocus: false,
 		refetchOnReconnect: true,
 		placeholderData: (prev) => prev,
-		select: (response) => ({ ...response, chartData: unpackBatchChartData(response.chartData) }),
+		select: (response) => ({ ...response, chartData: fromBatchChartColumns(JSON.parse(response.chartData)) }),
 	});
 
 	return {
