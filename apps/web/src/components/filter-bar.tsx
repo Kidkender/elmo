@@ -338,7 +338,6 @@ export function FilterBar({
 	resultTotal?: number;
 	/** For searches slow enough that the input should show they're still running. */
 	searching?: boolean;
-	/** For pages that search rows already in the browser, where waiting for typing to pause only adds lag. */
 	searchDebounceMs?: number;
 	/** Page-specific controls rendered inline with the dropdown group
 	 *  (e.g. the prompts list's sort dropdown). */
