@@ -137,12 +137,10 @@ export function toBatchChartData(
 }
 
 /**
- * The per-prompt chart points as they travel from the server. Each prompt's
- * `days` is `;`-separated days of `,`-separated counts: an index into `dates`,
- * total runs, runs naming the brand, then runs naming each of `competitors`.
- *
- * Text because the points are nearly all numbers, and the server-function
- * encoding spends more bytes describing a number than the number takes.
+ * Each prompt's `days` is `;`-separated days of `,`-separated counts: an index
+ * into `dates`, total runs, runs naming the brand, then runs naming each of
+ * `competitors`. Text because the server-function encoding spends more bytes
+ * describing a number than the number takes.
  */
 export interface PackedBatchChartData {
 	dates: string[];
