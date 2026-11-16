@@ -1,25 +1,29 @@
-import { createServerFn } from "@tanstack/react-start";
-import { getRequest } from "@tanstack/react-start/server";
+import { createIsomorphicFn } from "@tanstack/react-start";
+import { getCookie } from "@tanstack/react-start/server";
 
 const COOKIE = "tz";
-
-/** Null on a first visit, when only the browser knows its time zone. */
-export const getViewerTimezone = createServerFn({ method: "GET" }).handler((): string | null => {
-	const cookies = getRequest().headers.get("cookie") ?? "";
-	const match = cookies.split(/;\s*/).find((cookie) => cookie.startsWith(`${COOKIE}=`));
-	if (!match) return null;
-	const timezone = decodeURIComponent(match.slice(COOKIE.length + 1));
-	try {
-		Intl.DateTimeFormat("en-CA", { timeZone: timezone });
-		return timezone;
-	} catch {
-		return null;
-	}
-});
 
 export function browserTimezone(): string {
 	return Intl.DateTimeFormat().resolvedOptions().timeZone;
 }
+
+function isTimezone(value: string | undefined): value is string {
+	if (!value) return false;
+	try {
+		Intl.DateTimeFormat("en-CA", { timeZone: value });
+		return true;
+	} catch {
+		return false;
+	}
+}
+
+/** On the server this is what the browser reported on an earlier visit, so it is undefined on a first one. */
+export const viewerTimezone = createIsomorphicFn()
+	.server(() => {
+		const remembered = getCookie(COOKIE);
+		return isTimezone(remembered) ? remembered : undefined;
+	})
+	.client((): string | undefined => browserTimezone());
 
 export function rememberViewerTimezone(): void {
 	document.cookie = `${COOKIE}=${encodeURIComponent(browserTimezone())}; path=/; max-age=31536000; samesite=lax`;

@@ -2,14 +2,13 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { ALL_MODELS_VALUE } from "@workspace/config/model-filter";
 import { PromptsDisplay } from "@/components/prompts-display";
 import { batchChartDataQuery } from "@/hooks/use-batch-chart-data";
-import { brandDetailQuery } from "@/hooks/use-brands";
 import { type BrandFilterSearch, coerceLookback } from "@/hooks/use-list-filters";
 import { promptsSummaryQuery } from "@/hooks/use-prompts-summary";
 import { useBrandParams } from "@/hooks/use-route-params";
-import { getDefaultLookbackPeriod } from "@/lib/chart-utils";
+import { DEFAULT_LOOKBACK } from "@/lib/lookback";
 import { coercePromptOrder, DEFAULT_PROMPT_ORDER, type PromptOrder } from "@/lib/prompt-order";
 import { pageHead } from "@/lib/route-head";
-import { browserTimezone, getViewerTimezone } from "@/lib/viewer-timezone";
+import { viewerTimezone } from "@/lib/viewer-timezone";
 
 export const Route = createFileRoute("/_authed/app/org/$org/brand/$brand/visibility")({
 	staticData: { crumb: "Visibility" },
@@ -18,14 +17,13 @@ export const Route = createFileRoute("/_authed/app/org/$org/brand/$brand/visibil
 		return order === DEFAULT_PROMPT_ORDER ? {} : { order };
 	},
 	loaderDeps: ({ search }: { search: BrandFilterSearch }) => ({ model: search.model, lookback: search.lookback }),
-	loader: async ({ context, deps }) => {
-		// The server only knows the viewer's time zone from an earlier visit.
-		const timezone = typeof window === "undefined" ? await getViewerTimezone() : browserTimezone();
+	loader: ({ context, deps }) => {
+		const timezone = viewerTimezone();
+		// A first-time visitor's zone is unknown on the server; the page then loads its data in the browser.
 		if (!timezone) return;
 
-		const brand = await context.queryClient.ensureQueryData(brandDetailQuery(context.brandId));
 		const filters = {
-			lookback: coerceLookback(deps.lookback, getDefaultLookbackPeriod(brand.earliestDataDate)),
+			lookback: coerceLookback(deps.lookback, DEFAULT_LOOKBACK),
 			model: deps.model && deps.model !== ALL_MODELS_VALUE ? deps.model : undefined,
 		};
 		void context.queryClient.prefetchQuery(promptsSummaryQuery(context.brandId, filters, timezone));
