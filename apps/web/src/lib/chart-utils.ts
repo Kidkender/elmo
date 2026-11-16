@@ -137,6 +137,58 @@ export function toBatchChartData(
 }
 
 /**
+ * The per-prompt chart points as they travel from the server. Each prompt's
+ * `days` is `;`-separated days of `,`-separated counts: an index into `dates`,
+ * total runs, runs naming the brand, then runs naming each of `competitors`.
+ *
+ * Text because the points are nearly all numbers, and the server-function
+ * encoding spends more bytes describing a number than the number takes.
+ */
+export interface PackedBatchChartData {
+	dates: string[];
+	competitors: string[];
+	prompts: { prompt_id: string; days: string }[];
+}
+
+export function packBatchChartData(points: ProcessedBatchChartDataPoint[]): PackedBatchChartData {
+	const dates = [...new Set(points.map((point) => String(point.date)))].sort();
+	const dateIndex = new Map(dates.map((date, index) => [date, index]));
+	const competitors = [...new Set(points.flatMap((point) => Object.keys(point.competitor_counts)))].sort();
+
+	const daysByPrompt = new Map<string, string[]>();
+	for (const point of points) {
+		const day = [
+			dateIndex.get(String(point.date)),
+			point.total_runs,
+			point.brand_mentioned_count,
+			...competitors.map((name) => point.competitor_counts[name] ?? 0),
+		].join(",");
+		const days = daysByPrompt.get(point.prompt_id);
+		if (days) days.push(day);
+		else daysByPrompt.set(point.prompt_id, [day]);
+	}
+
+	return {
+		dates,
+		competitors,
+		prompts: [...daysByPrompt].map(([prompt_id, days]) => ({ prompt_id, days: days.join(";") })),
+	};
+}
+
+export function unpackBatchChartData(packed: PackedBatchChartData): ProcessedBatchChartDataPoint[] {
+	return packed.prompts.flatMap(({ prompt_id, days }) =>
+		days.split(";").map((day) => {
+			const [dateIndex, total_runs, brand_mentioned_count, ...counts] = day.split(",").map(Number);
+			const competitor_counts: Record<string, number> = {};
+			counts.forEach((count, index) => {
+				if (count > 0) competitor_counts[packed.competitors[index]] = count;
+			});
+			return { prompt_id, date: packed.dates[dateIndex], total_runs, brand_mentioned_count, competitor_counts };
+		}),
+	);
+}
+
+/**
  * Seeded with each prompt's earliest observation so days before its first run
  * still count; otherwise a staggered schedule reads as a ramp-up.
  */
