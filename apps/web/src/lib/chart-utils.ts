@@ -189,6 +189,43 @@ export function unpackBatchChartData(packed: PackedBatchChartData): ProcessedBat
 }
 
 /**
+ * Brand visibility across `promptIds` for each day of `dateRange`, from the
+ * same points the per-prompt charts draw. A prompt counts on every day with
+ * its latest result so far — or its first, before it has run — so a gap in a
+ * schedule doesn't read as a dip.
+ */
+export function visibilityOverWindow(
+	pointsByPrompt: Map<string, ProcessedBatchChartDataPoint[]>,
+	promptIds: string[],
+	dateRange: string[],
+) {
+	const runs = new Array<number>(dateRange.length).fill(0);
+	const mentioned = new Array<number>(dateRange.length).fill(0);
+	let totalRuns = 0;
+
+	for (const promptId of promptIds) {
+		const days = pointsByPrompt.get(promptId);
+		if (!days || days.length === 0) continue;
+		let next = 0;
+		let carried = days[0];
+		for (let index = 0; index < dateRange.length; index++) {
+			while (next < days.length && String(days[next].date) <= dateRange[index]) carried = days[next++];
+			runs[index] += carried.total_runs;
+			mentioned[index] += carried.brand_mentioned_count;
+		}
+		for (const day of days) totalRuns += day.total_runs;
+	}
+
+	const visibilityTimeSeries = dateRange.map((date, index) => ({
+		date,
+		visibility: runs[index] === 0 ? null : Math.round((mentioned[index] / runs[index]) * 100),
+	}));
+	const observed = visibilityTimeSeries.filter((point) => point.visibility !== null);
+
+	return { currentVisibilityPct: observed.at(-1)?.visibility ?? 0, totalRuns, visibilityTimeSeries };
+}
+
+/**
  * Seeded with each prompt's earliest observation so days before its first run
  * still count; otherwise a staggered schedule reads as a ramp-up.
  */

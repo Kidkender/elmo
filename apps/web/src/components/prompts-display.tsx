@@ -1,6 +1,7 @@
 import { IconEditCircle } from "@tabler/icons-react";
 import { Link, useSearch } from "@tanstack/react-router";
 import type { Competitor } from "@workspace/lib/db/schema";
+import { matchesTagFilter } from "@workspace/lib/tag-utils";
 import { buttonVariants } from "@workspace/ui/components/button";
 import { Card } from "@workspace/ui/components/card";
 import { cn } from "@workspace/ui/lib/utils";
@@ -19,7 +20,7 @@ import { useBrand } from "@/hooks/use-brands";
 import { useListFilters } from "@/hooks/use-list-filters";
 import { usePromptsSummary } from "@/hooks/use-prompts-summary";
 import { useBrandParams } from "@/hooks/use-route-params";
-import type { ChartSubject } from "@/lib/chart-utils";
+import { type ChartSubject, generateDateRange, visibilityOverWindow } from "@/lib/chart-utils";
 import type { LookbackPeriod } from "@/lib/lookback";
 import { coercePromptOrder, orderPrompts } from "@/lib/prompt-order";
 import { skeletonRows } from "@/lib/skeleton-rows";
@@ -29,6 +30,9 @@ interface PromptsDisplayProps {
 	pageDescription: string;
 	pageInfoContent?: React.ReactNode;
 }
+
+/** Search and tags are applied to rows already in the browser, so this only has to coalesce a burst of keystrokes. */
+const LOCAL_SEARCH_DEBOUNCE_MS = 40;
 
 /** Host component: renders the page shell (title, sticky bar, content)
  *  and composes independent sub-sections. It doesn't subscribe to any
@@ -68,28 +72,47 @@ function PromptsContent({ brandId }: { brandId: string | undefined }) {
 	const availableIndividualModels = useMemo(() => trackedTargets.map((target) => target.value), [trackedTargets]);
 
 	const modelParam = model === ALL_MODELS_VALUE ? undefined : model;
+	// Both requests cover every prompt in the window. Tags and search narrow
+	// them here, so changing either never waits on the server.
 	const {
 		data: promptsSummary,
 		isLoading: isLoadingSummary,
 		error: summaryError,
-	} = usePromptsSummary(brandId, {
+	} = usePromptsSummary(brandId, { lookback, model: modelParam });
+	const { data: batchChartData, isLoading: isLoadingChartData } = useBatchChartData(brandId, {
 		lookback,
 		model: modelParam,
-		tags: tags.length > 0 ? tags : undefined,
 	});
 
 	const availableTags = promptsSummary?.availableTags ?? [];
 
-	// Only the list uses this; the chart sections resolve the same prompts
-	// server-side from the filters.
-	const sortedPrompts = useMemo(() => {
-		if (!promptsSummary) return [];
-		const allPrompts = promptsSummary.prompts;
-		const filtered = search
-			? allPrompts.filter((p) => p.value.toLowerCase().includes(search.toLowerCase()))
-			: allPrompts;
-		return orderPrompts(filtered, order);
-	}, [promptsSummary, search, order]);
+	const matchingPrompts = useMemo(() => {
+		const needle = search.toLowerCase();
+		return (promptsSummary?.prompts ?? []).filter(
+			(prompt) => matchesTagFilter(prompt.tags, tags) && (!needle || prompt.value.toLowerCase().includes(needle)),
+		);
+	}, [promptsSummary, tags, search]);
+	const sortedPrompts = useMemo(() => orderPrompts(matchingPrompts, order), [matchingPrompts, order]);
+
+	const visibility = useMemo(() => {
+		if (!batchChartData) return undefined;
+		const pointsByPrompt = new Map<string, typeof batchChartData.chartData>();
+		for (const point of batchChartData.chartData) {
+			const points = pointsByPrompt.get(point.prompt_id);
+			if (points) points.push(point);
+			else pointsByPrompt.set(point.prompt_id, [point]);
+		}
+		const { fromDate, toDate } = batchChartData.dateRange;
+		return {
+			...visibilityOverWindow(
+				pointsByPrompt,
+				matchingPrompts.map((prompt) => prompt.id),
+				generateDateRange(new Date(fromDate), new Date(toDate)),
+			),
+			totalPrompts: matchingPrompts.length,
+			totalCitations: matchingPrompts.reduce((total, prompt) => total + prompt.citations, 0),
+		};
+	}, [batchChartData, matchingPrompts]);
 
 	const isInitialLoad = isLoadingSummary && !promptsSummary;
 
@@ -99,10 +122,11 @@ function PromptsContent({ brandId }: { brandId: string | undefined }) {
 			availableTags={availableTags}
 			trackedTargets={trackedTargets}
 			showSearch
+			searchDebounceMs={LOCAL_SEARCH_DEBOUNCE_MS}
 			showModelSelector
 			showResultCount
 			filterBarExtras={<PromptOrderDropdown />}
-			filterSectionExtras={<VisibilityBarSection brandId={brandId} />}
+			filterSectionExtras={<VisibilityBarSection visibility={visibility} lookback={lookback} />}
 			isLoading={isInitialLoad}
 			loadingState={<ContentLoadingSkeleton />}
 			isError={Boolean(summaryError)}
@@ -139,9 +163,9 @@ function PromptsContent({ brandId }: { brandId: string | undefined }) {
 				brandId={brandId}
 				lookback={lookback}
 				selectedModel={model}
-				modelParam={modelParam}
+				batchChartData={batchChartData}
+				isLoadingChartData={isLoadingChartData}
 				searchQuery={search}
-				selectedTags={tags}
 				sortedPrompts={sortedPrompts}
 				availableIndividualModels={availableIndividualModels}
 			/>
@@ -157,28 +181,21 @@ function ChartSection({
 	brandId,
 	lookback,
 	selectedModel,
-	modelParam,
+	batchChartData,
+	isLoadingChartData,
 	searchQuery,
-	selectedTags,
 	sortedPrompts,
 	availableIndividualModels,
 }: {
 	brandId: string | undefined;
 	lookback: LookbackPeriod;
 	selectedModel: string;
-	modelParam: string | undefined;
+	batchChartData: ReturnType<typeof useBatchChartData>["data"];
+	isLoadingChartData: boolean;
 	searchQuery: string;
-	selectedTags: string[];
 	sortedPrompts: { id: string; value: string; firstEvaluatedAt?: Date | string | null }[];
 	availableIndividualModels: string[];
 }) {
-	const { data: batchChartData, isLoading: isLoadingChartData } = useBatchChartData(brandId, {
-		lookback,
-		model: modelParam,
-		tags: selectedTags.length > 0 ? selectedTags : undefined,
-		search: searchQuery || undefined,
-	});
-
 	const { startDate, endDate } = useMemo(() => {
 		if (!batchChartData?.dateRange) {
 			const now = new Date();
