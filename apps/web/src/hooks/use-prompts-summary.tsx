@@ -17,7 +17,6 @@ export const promptsSummaryKeys = {
 		[...promptsSummaryKeys.all, brandId, filters, timezone] as const,
 };
 
-/** Shared with route loaders, so what they request ahead of time is what the hook then finds. */
 export const promptsSummaryQuery = (brandId: string, filters: PromptsSummaryFilters | undefined, timezone: string) => ({
 	queryKey: promptsSummaryKeys.list(brandId, filters, timezone),
 	queryFn: () =>
@@ -35,8 +34,7 @@ export const promptsSummaryQuery = (brandId: string, filters: PromptsSummaryFilt
 
 export function usePromptsSummary(brandId?: string, filters?: PromptsSummaryFilters) {
 	const resolvedBrandId = useResolvedBrandId(brandId);
-	// A loader may have delivered this with the document, but the server
-	// rendered the loading state, so the first render in the browser has to too.
+	// The server renders the loading state even when a loader sent the data along.
 	const hydrated = useHydrated();
 
 	const query = useQuery({

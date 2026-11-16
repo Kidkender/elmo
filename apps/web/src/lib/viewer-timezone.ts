@@ -3,11 +3,7 @@ import { getRequest } from "@tanstack/react-start/server";
 
 const COOKIE = "tz";
 
-/**
- * The time zone the browser reported on an earlier visit, so the server can
- * load the same calendar-day window the browser is about to ask for. Null on a
- * first visit, when only the browser knows.
- */
+/** Null on a first visit, when only the browser knows its time zone. */
 export const getViewerTimezone = createServerFn({ method: "GET" }).handler((): string | null => {
 	const cookies = getRequest().headers.get("cookie") ?? "";
 	const match = cookies.split(/;\s*/).find((cookie) => cookie.startsWith(`${COOKIE}=`));

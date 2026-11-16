@@ -11,7 +11,6 @@ export interface BatchChartDataFilters {
 	model?: string;
 }
 
-/** Shared with route loaders, so what they request ahead of time is what the hook then finds. */
 export const batchChartDataQuery = (brandId: string, filters: BatchChartDataFilters | undefined, timezone: string) => ({
 	queryKey: ["batch-chart-data", brandId, filters?.lookback, filters?.model, timezone],
 	queryFn: () =>
@@ -23,8 +22,7 @@ export const batchChartDataQuery = (brandId: string, filters: BatchChartDataFilt
 
 export function useBatchChartData(brandId?: string, filters?: BatchChartDataFilters) {
 	const resolvedBrandId = useResolvedBrandId(brandId);
-	// A loader may have delivered this with the document, but the server
-	// rendered the loading state, so the first render in the browser has to too.
+	// The server renders the loading state even when a loader sent the data along.
 	const hydrated = useHydrated();
 
 	const query = useQuery({

@@ -8,7 +8,6 @@ export const brandKeys = {
 	competitors: (brandId: string) => [...brandKeys.all, "competitors", brandId] as const,
 };
 
-/** Shared with the brand route's loader, so what it requests ahead of time is what the hook then finds. */
 export const brandDetailQuery = (brandId: string) => ({
 	queryKey: brandKeys.detail(brandId),
 	queryFn: () => getBrand({ data: { brandId } }),

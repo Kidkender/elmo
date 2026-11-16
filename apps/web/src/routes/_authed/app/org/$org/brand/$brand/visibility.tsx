@@ -18,12 +18,8 @@ export const Route = createFileRoute("/_authed/app/org/$org/brand/$brand/visibil
 		return order === DEFAULT_PROMPT_ORDER ? {} : { order };
 	},
 	loaderDeps: ({ search }: { search: BrandFilterSearch }) => ({ model: search.model, lookback: search.lookback }),
-	// Starts the page's two requests without waiting for them: on a first load
-	// they travel with the document, and on a navigation they are under way
-	// before the page renders (or, with a hovered link, before the click).
 	loader: async ({ context, deps }) => {
-		// Which calendar days a window covers depends on the viewer's time zone,
-		// which the server only knows from an earlier visit.
+		// The server only knows the viewer's time zone from an earlier visit.
 		const timezone = typeof window === "undefined" ? await getViewerTimezone() : browserTimezone();
 		if (!timezone) return;
 

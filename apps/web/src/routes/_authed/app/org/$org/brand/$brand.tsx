@@ -74,10 +74,7 @@ export const Route = createFileRoute("/_authed/app/org/$org/brand/$brand")({
 		return { brandId: brand.id };
 	},
 	loader: async ({ context }): Promise<BrandData> => {
-		// Every brand page reads the brand while rendering. Requested here, it
-		// arrives with the document on a first load instead of after hydration,
-		// and is under way before a navigation renders. The server waits for it
-		// so that its render and the browser's first one agree.
+		// The server waits for it so its render and the browser's first one agree.
 		const brandDetail = context.queryClient.prefetchQuery(brandDetailQuery(context.brandId));
 		const [result] = await Promise.all([
 			getBrandData({ data: { organizationId: context.organization.id, brandId: context.brandId } }),
