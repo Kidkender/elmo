@@ -186,6 +186,17 @@ export function unpackBatchChartData(packed: PackedBatchChartData): ProcessedBat
 	);
 }
 
+function pointsByPrompt(points: ProcessedBatchChartDataPoint[], promptIds: ReadonlySet<string>) {
+	const byPrompt = new Map<string, ProcessedBatchChartDataPoint[]>();
+	for (const point of points) {
+		if (!promptIds.has(point.prompt_id)) continue;
+		const days = byPrompt.get(point.prompt_id);
+		if (days) days.push(point);
+		else byPrompt.set(point.prompt_id, [point]);
+	}
+	return byPrompt;
+}
+
 /**
  * A prompt counts on every day with its latest result so far — or its first,
  * before it has run — so a gap in a schedule doesn't read as a dip.
@@ -195,19 +206,11 @@ export function visibilityOverWindow(
 	promptIds: ReadonlySet<string>,
 	dateRange: string[],
 ) {
-	const daysByPrompt = new Map<string, ProcessedBatchChartDataPoint[]>();
-	for (const point of points) {
-		if (!promptIds.has(point.prompt_id)) continue;
-		const days = daysByPrompt.get(point.prompt_id);
-		if (days) days.push(point);
-		else daysByPrompt.set(point.prompt_id, [point]);
-	}
-
 	const runs = new Array<number>(dateRange.length).fill(0);
 	const mentioned = new Array<number>(dateRange.length).fill(0);
 	let totalRuns = 0;
 
-	for (const days of daysByPrompt.values()) {
+	for (const days of pointsByPrompt(points, promptIds).values()) {
 		let next = 0;
 		let carried = days[0];
 		for (let index = 0; index < dateRange.length; index++) {
