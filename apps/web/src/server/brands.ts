@@ -122,11 +122,7 @@ function getDefaultBrandDomains(): string[] {
 		.filter((d): d is string => d !== null);
 }
 
-/**
- * Prompts and competitors are left out: the pages that need them fetch them,
- * and every brand page loads this. Takes entitlements from the caller so the
- * brand list doesn't query them once per brand.
- */
+/** Takes entitlements from the caller so the brand list doesn't query them once per brand. */
 async function getBrandDetailFromDb(
 	brandId: string,
 	entitlements?: Entitlements,
