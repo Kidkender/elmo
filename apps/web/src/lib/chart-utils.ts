@@ -137,12 +137,10 @@ export function toBatchChartData(
 }
 
 /**
- * The per-prompt chart points as they travel from the server. Each prompt's
- * `days` is `;`-separated days of `,`-separated counts: an index into `dates`,
- * total runs, runs naming the brand, then runs naming each of `competitors`.
- *
- * Text because the points are nearly all numbers, and the server-function
- * encoding spends more bytes describing a number than the number takes.
+ * Each prompt's `days` is `;`-separated days of `,`-separated counts: an index
+ * into `dates`, total runs, runs naming the brand, then runs naming each of
+ * `competitors`. Text because the server-function encoding spends more bytes
+ * describing a number than the number takes.
  */
 export interface PackedBatchChartData {
 	dates: string[];
@@ -188,24 +186,31 @@ export function unpackBatchChartData(packed: PackedBatchChartData): ProcessedBat
 	);
 }
 
+function pointsByPrompt(points: ProcessedBatchChartDataPoint[], promptIds: ReadonlySet<string>) {
+	const byPrompt = new Map<string, ProcessedBatchChartDataPoint[]>();
+	for (const point of points) {
+		if (!promptIds.has(point.prompt_id)) continue;
+		const days = byPrompt.get(point.prompt_id);
+		if (days) days.push(point);
+		else byPrompt.set(point.prompt_id, [point]);
+	}
+	return byPrompt;
+}
+
 /**
- * Brand visibility across `promptIds` for each day of `dateRange`, from the
- * same points the per-prompt charts draw. A prompt counts on every day with
- * its latest result so far — or its first, before it has run — so a gap in a
- * schedule doesn't read as a dip.
+ * A prompt counts on every day with its latest result so far — or its first,
+ * before it has run — so a gap in a schedule doesn't read as a dip.
  */
 export function visibilityOverWindow(
-	pointsByPrompt: Map<string, ProcessedBatchChartDataPoint[]>,
-	promptIds: string[],
+	points: ProcessedBatchChartDataPoint[],
+	promptIds: ReadonlySet<string>,
 	dateRange: string[],
 ) {
 	const runs = new Array<number>(dateRange.length).fill(0);
 	const mentioned = new Array<number>(dateRange.length).fill(0);
 	let totalRuns = 0;
 
-	for (const promptId of promptIds) {
-		const days = pointsByPrompt.get(promptId);
-		if (!days || days.length === 0) continue;
+	for (const days of pointsByPrompt(points, promptIds).values()) {
 		let next = 0;
 		let carried = days[0];
 		for (let index = 0; index < dateRange.length; index++) {

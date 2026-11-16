@@ -31,7 +31,7 @@ interface PromptsDisplayProps {
 	pageInfoContent?: React.ReactNode;
 }
 
-/** Search and tags are applied to rows already in the browser, so this only has to coalesce a burst of keystrokes. */
+/** Filtering is local, so this only has to coalesce a burst of keystrokes. */
 const LOCAL_SEARCH_DEBOUNCE_MS = 40;
 
 /** Host component: renders the page shell (title, sticky bar, content)
@@ -72,8 +72,6 @@ function PromptsContent({ brandId }: { brandId: string | undefined }) {
 	const availableIndividualModels = useMemo(() => trackedTargets.map((target) => target.value), [trackedTargets]);
 
 	const modelParam = model === ALL_MODELS_VALUE ? undefined : model;
-	// Both requests cover every prompt in the window. Tags and search narrow
-	// them here, so changing either never waits on the server.
 	const {
 		data: promptsSummary,
 		isLoading: isLoadingSummary,
@@ -96,17 +94,11 @@ function PromptsContent({ brandId }: { brandId: string | undefined }) {
 
 	const visibility = useMemo(() => {
 		if (!batchChartData) return undefined;
-		const pointsByPrompt = new Map<string, typeof batchChartData.chartData>();
-		for (const point of batchChartData.chartData) {
-			const points = pointsByPrompt.get(point.prompt_id);
-			if (points) points.push(point);
-			else pointsByPrompt.set(point.prompt_id, [point]);
-		}
 		const { fromDate, toDate } = batchChartData.dateRange;
 		return {
 			...visibilityOverWindow(
-				pointsByPrompt,
-				matchingPrompts.map((prompt) => prompt.id),
+				batchChartData.chartData,
+				new Set(matchingPrompts.map((prompt) => prompt.id)),
 				generateDateRange(new Date(fromDate), new Date(toDate)),
 			),
 			totalPrompts: matchingPrompts.length,

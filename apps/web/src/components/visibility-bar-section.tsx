@@ -18,7 +18,6 @@ export function VisibilityBarSection({
 	visibility,
 	lookback,
 }: {
-	/** Undefined until the window's chart data has loaded. */
 	visibility: FilteredVisibility | undefined;
 	lookback: LookbackPeriod;
 }) {
